@@ -51,7 +51,7 @@ def lexical_search(query, top_k = 20):
     return [(idx, float(scores[idx])) for idx in top_indices]
 
 
-def semnatic_search(query, top_k = 20):
+def semantic_search(query, top_k = 20):
     query_vector = model.encode(query, normalize_embeddings=True)
     scores = np.dot(vector_matrix, query_vector )
 
@@ -59,27 +59,45 @@ def semnatic_search(query, top_k = 20):
     return [(idx, float(scores[idx])) for idx in top_indices]
 
 # Reciprocal Rank Fusion (RRF)
-# def hybrid_search(query, top_k = 5): 
+def hybrid_search(query, top_k = 5, k_constant = 60): 
 
-#     bm25_results = lexical_search(query)
-#     vector_results = semantic_search(query)
+    bm25_results = lexical_search(query)
+    vector_results = semantic_search(query)
 
-#     rrf_scores={}
+    rrf_scores={}
+
+    for rank, (idx, _) in enumerate(bm25_results, start=1):
+        rrf_scores[idx] = rrf_scores.get(idx, 0.0) + (1/(k_constant + rank ))
+    
+    for rank, (idx, _) in enumerate(vector_results, start=1):
+        rrf_scores[idx] = rrf_scores.get(idx, 0.0) + (1/(k_constant + rank))
+
+    # Sort by descending order and by values, not index
+    sorted_indices = sorted(rrf_scores.keys(), key=lambda i: rrf_scores[i], reverse=True)
+
+    return [(idx, rrf_scores[idx]) for idx in sorted_indices[:top_k]]
 
 
 if __name__ == "__main__":
     test_query = "What happens if I microwave fish?"
+    
+    hybrid_results = hybrid_search(test_query, top_k=3)
+
+    for rank, (idx, rrf_score) in enumerate(hybrid_results, start=1):
+        print(f"Rank {rank}, RRF Score: {rrf_score:.5f}, Chunk ID: {chunks[idx]['chunk_id']}")
+        print(f"Text Snippet: {chunks[idx]['text'][:100]}...\n")
+
+
+    # Lexical Search
+    # bm25_results = lexical_search(test_query, top_k=3)
+    # print("///Top 3 BM25 Matches")
+    # for idx, score in bm25_results:
+    #     print(f"Score: {score:.2f}, Chunk ID: {chunks[idx]['chunk_id']}")
+    #     print(f"Text Snippet: {chunks[idx]['text'][:500]}\n")
         
-    # 1. Run Lexical Search
-    bm25_results = lexical_search(test_query, top_k=3)
-    print("///Top 3 BM25 Matches")
-    for idx, score in bm25_results:
-        print(f"Score: {score:.2f}, Chunk ID: {chunks[idx]['chunk_id']}")
-        print(f"Text Snippet: {chunks[idx]['text'][:500]}\n")
-        
-    # 2. Run Dense Search
-    vector_results = semnatic_search(test_query, top_k=3)
-    print("///Top 3 Vector Semantic Matches")
-    for idx, score in vector_results:
-        print(f"Score: {score:.4f}, Chunk ID: {chunks[idx]['chunk_id']}")
-        print(f"Text Snippet: {chunks[idx]['text'][:500]}\n")
+    # Vector Search
+    # vector_results = semantic_search(test_query, top_k=3)
+    # print("///Top 3 Vector Semantic Matches")
+    # for idx, score in vector_results:
+    #     print(f"Score: {score:.4f}, Chunk ID: {chunks[idx]['chunk_id']}")
+    #     print(f"Text Snippet: {chunks[idx]['text'][:500]}\n")
